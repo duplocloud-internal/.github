@@ -1,0 +1,88 @@
+name: Build and Deploy TF
+on:
+  # (Optional) Allows users to trigger the workflow manually from the GitHub UI
+  workflow_dispatch:
+    inputs:
+      tf_action:
+        description: 'TF apply or destroy'
+        default: 'plan'
+        required: true
+        type: choice
+        options:
+          - plan
+          - destroy
+  # Triggers the workflow on push to matching branches
+  push:
+    branches:
+      - [ $default-branch ]
+    paths:
+      - 'infrastructure/**'
+  pull-request:
+    branches:
+      - [ $default-branch ]
+    paths:
+      - 'infrastructure/**'
+env:
+  duplo_host: "${{ secrets.DuploHost }}"
+  duplo_token: "${{ secrets.DUPLO_TOKEN }}"
+  AWS_ACCESS_KEY: "${{ secrets.AWS_ACCESS_KEY }}"
+  AWS_SECRET_KEY: "${{ secrets.AWS_SECRET_KEY }}"
+
+jobs:
+  initTerraformingMars:
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Install deps
+        run: |
+          sudo apt-get install  -y unzip \
+            Node.js \
+            npm 
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: TF init
+        run: |
+          ls -la
+          terraform init
+        working-directory: ./infrastructure/
+
+      - name: TF action
+        run: terraform ${{ inputs.tf_action }} -out=tfplan
+        working-directory: ./infrastructure/
+
+      - name: TF fmt check
+        run: terraform fmt -check -recursive
+        working-directory: ./infrastructure/
+        continue-on-error: true
+      
+      - name: Publish pipeline artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifact
+          path: ./infrastructure/
+  TerraformMars:
+    needs: initTerraformingMars
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: artifact
+      
+      - name: reset File permissions and mode
+        run: | 
+          ls -la
+          chmod a+x -R .terraform/providers/registry.terraform.io/*
+      
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Show the TF plan
+        run: terraform show 'tfplan'
+
+      # - name: TF apply the created artifact
+      #   uses: terraform apply 'tfplan'

@@ -1,0 +1,7 @@
+{
+    "name": "Duplo Terraform Workflow",
+    "description": "Duplo starter workflow for Terraform.",
+    "categories": [
+        "Terraform"
+    ]
+}
